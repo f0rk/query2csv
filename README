@@ -1,0 +1,5 @@
+Take a configured connection mode and a file containing a SQL query and execute it.
+
+Call query2csv with no arguments for help.
+
+Requires perl, Config::Tiny, DBI, and Text::CSV.

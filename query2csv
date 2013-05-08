@@ -1,0 +1,123 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+use IO::File;
+use IO::Handle;
+
+use File::Spec;
+use Config::Tiny;
+use DBI;
+use Text::CSV;
+
+my $stdin = IO::Handle->new()->fdopen(fileno(STDIN), "r");
+my $stdout = IO::Handle->new()->fdopen(fileno(STDOUT), "w");
+my $stderr = IO::Handle->new()->fdopen(fileno(STDERR), "w");
+
+my $config_path = File::Spec->join($ENV{HOME}, ".query2csv");
+if (!-r  $config_path) {
+    $config_path = "/etc/query2csv";
+}
+
+if (!-r $config_path) {
+    $stderr->print("couldn't locate configuration file\n");
+    exit(1);
+}
+
+my $usage =<<END
+query2csv <mode> <script> <output>
+    mode: an alias for a connection string as found in the configuration file.
+    script: the script script to execute.
+    output: where to send the results (default: stdout).
+END
+;
+
+my $mode = $ARGV[0];
+my $script = $ARGV[1];
+my $output_path = $ARGV[2];
+
+if (!defined($mode)) {
+    $stderr->print("mode not provided\n");
+    $stderr->print($usage);
+    exit(1);
+}
+
+if (!defined($script)) {
+    $stderr->print("script not provided\n");
+    $stderr->print($usage);
+    exit(1);
+}
+
+if (!-r $script) {
+    $stderr->print("script '$script' not found\n");
+    exit(1);
+}
+
+my $output = $stdout;
+if (defined($output_path) && $output_path ne "-") {
+    $output = IO::File->new($output_path, ">");
+    if (!defined($output_path)) {
+        $stderr->print("$!\n");
+        exit(1);
+    }
+}
+
+my $script_fh = IO::File->new($script, "<");
+my $query = undef;
+{
+    local $/;
+    $query = <$script_fh>;
+};
+$script_fh->close();
+
+my $config = Config::Tiny->new();
+$config = $config->read($config_path);
+
+my $connection_string = $config->{modes}->{$mode.".dsn"};
+if (!defined($connection_string)) {
+    $stderr->print("dsn for mode '$mode' not found in config file!\n");
+    exit(1);
+}
+
+my $username = $config->{modes}->{$mode.".username"};
+my $password = $config->{modes}->{$mode.".password"};
+
+my $dbh = DBI->connect($connection_string, $username, $password);
+if (!defined($dbh)) {
+    $stderr->print("connecting with mode '$mode' failed!\n");
+    exit(1);
+}
+
+my $sth = $dbh->prepare($query);
+my $rv = $sth->execute();
+if (!$rv) {
+    $stderr->print("executing query failed!\n");
+    $stderr->print($sth->errstr);
+    $stderr->print("\n");
+    exit(1);
+}
+
+my $csv = Text::CSV->new({ binary => 1, eol => $/ });
+if (!defined($csv)) {
+    $stderr->print("cannot use Text::CSV: " . Text::CSV->error_diag());
+    $stderr->print("\n");
+    exit(1);
+}
+
+my $status = $csv->print($output, $sth->{NAME});
+if (!$status) {
+    $stderr->print($csv->error_diag());
+    exit(1);
+}
+
+while (my $row = $sth->fetchrow_arrayref()) {
+    $status = $csv->print($output, $row);
+    if (!$status) {
+        $stderr->print($csv->error_diag());
+        exit(1);
+    }
+}
+
+$dbh->disconnect();
+
