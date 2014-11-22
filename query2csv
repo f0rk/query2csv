@@ -2,9 +2,11 @@
 
 use strict;
 use warnings;
+use autodie qw(:all);
 
 use IO::File;
 use IO::Handle;
+use Getopt::Long;
 
 use File::Spec;
 use Config::Tiny;
@@ -26,12 +28,17 @@ if (!-r $config_path) {
 }
 
 my $usage =<<END
-query2csv <mode> <script> <output>
+query2csv [--no-cursor] <mode> <script> <output>
+    --no-cursor: don't execute query with a cursor.
     mode: an alias for a connection string as found in the configuration file.
     script: the script script to execute.
     output: where to send the results (default: stdout).
 END
 ;
+
+my $no_cursor = 0;
+
+GetOptions("--no-cursor" => \$no_cursor);
 
 my $mode = $ARGV[0];
 my $script = $ARGV[1];
@@ -89,15 +96,6 @@ if (!defined($dbh)) {
     exit(1);
 }
 
-my $sth = $dbh->prepare($query);
-my $rv = $sth->execute();
-if (!$rv) {
-    $stderr->print("executing query failed!\n");
-    $stderr->print($sth->errstr);
-    $stderr->print("\n");
-    exit(1);
-}
-
 my $csv = Text::CSV->new({ binary => 1, eol => $/ });
 if (!defined($csv)) {
     $stderr->print("cannot use Text::CSV: " . Text::CSV->error_diag());
@@ -105,18 +103,95 @@ if (!defined($csv)) {
     exit(1);
 }
 
-my $status = $csv->print($output, $sth->{NAME});
-if (!$status) {
-    $stderr->print($csv->error_diag());
-    exit(1);
-}
+sub write_headers {
+    my ($sth) = @_;
 
-while (my $row = $sth->fetchrow_arrayref()) {
-    $status = $csv->print($output, $row);
+    my $status = $csv->print($output, $sth->{NAME});
     if (!$status) {
         $stderr->print($csv->error_diag());
         exit(1);
     }
+}
+
+sub write_rows {
+    my ($sth) = @_;
+
+    while (my $row = $sth->fetchrow_arrayref()) {
+        my $rv = $csv->print($output, $row);
+        if (!$rv) {
+            $stderr->print($csv->error_diag());
+            exit(1);
+        }
+    }
+}
+
+if (!$no_cursor) {
+    my $begin = $dbh->prepare("begin");
+    my $begin_rv = $begin->execute();
+
+    if (!$begin_rv) {
+        $stderr->print("begin failed!\n");
+        $stderr->print($begin->errstr);
+        $stderr->print("\n");
+        exit(1);
+    }
+
+    my $csrsth = $dbh->prepare("declare csr cursor without hold for $query");
+    my $rv = $csrsth->execute();
+
+    if (!$rv) {
+        $stderr->print("preparing cursor failed!\n");
+        $stderr->print($csrsth->errstr);
+        $stderr->print("\n");
+        exit(1);
+    }
+
+    my $have_written_headers = 0;
+
+    while (1) {
+        my $sth = $dbh->prepare("fetch 5000 from csr");
+
+        my $frv = $sth->execute();
+        if (!$frv) {
+            $stderr->print("executing fetch failed!\n");
+            $stderr->print($sth->errstr);
+            $stderr->print("\n");
+            exit(1);
+        }
+
+        if ($sth->rows() == 0) {
+            last;
+        }
+
+        if (!$have_written_headers) {
+            write_headers($sth);
+            $have_written_headers = 1;
+        }
+
+        write_rows($sth);
+    }
+
+    my $commit = $dbh->prepare("commit");
+    my $commit_rv = $commit->execute();
+
+    if (!$commit_rv) {
+        $stderr->print("commit failed!\n");
+        $stderr->print($commit->errstr);
+        $stderr->print("\n");
+        exit(1);
+    }
+} else {
+    my $sth = $dbh->prepare($query);
+    my $rv = $sth->execute();
+    if (!$rv) {
+        $stderr->print("executing query failed!\n");
+        $stderr->print($sth->errstr);
+        $stderr->print("\n");
+        exit(1);
+    }
+
+    write_headers($sth);
+    write_rows($sth);
 }
 
 $dbh->disconnect();

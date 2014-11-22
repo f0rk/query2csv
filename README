@@ -1,5 +1,28 @@
-Take a configured connection mode and a file containing a SQL query and execute it.
+Take a configured connection mode and a file containing a SQL query and execute
+it, saving the result as a csv.
 
 Call query2csv with no arguments for help.
 
-Requires perl, Config::Tiny, DBI, and Text::CSV.
+Requires perl, Getopt::Long, Config::Tiny, DBI, and Text::CSV.
+
+Examples:
+
+This is a basic config file:
+
+~$ cat ~/.query2csv
+[modes]
+dev.dsn = dbi:Pg:dbname=dev
+dev.username = postgres
+dev.password = postgres
+
+staging.dsn = dbi:Pg:dbname=dev
+staging.username = postgres
+staging.password = postgres
+
+After you've created a config file, query2csv can be used thusly:
+
+query2csv dev ~/sql/query.sql ~/files/query.csv
+
+If you'd like to execute your query without a cursor, you can use:
+query2csv --no-cursor dev ~/sql/query.sql ~/files/query.csv
+
