@@ -56,9 +56,16 @@ if (!defined($script)) {
     exit(1);
 }
 
-if (!-r $script) {
-    $stderr->print("script '$script' not found\n");
-    exit(1);
+my $script_fh = undef;
+if ($script eq "-") {
+    $script_fh = $stdin;
+} else {
+    if (!-r $script) {
+        $stderr->print("script '$script' not found\n");
+        exit(1);
+    }
+
+    $script_fh = IO::File->new($script, "<");
 }
 
 my $output = $stdout;
@@ -70,7 +77,6 @@ if (defined($output_path) && $output_path ne "-") {
     }
 }
 
-my $script_fh = IO::File->new($script, "<");
 my $query = undef;
 {
     local $/;
