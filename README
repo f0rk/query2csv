@@ -3,7 +3,10 @@ it, saving the result as a csv.
 
 Call query2csv with no arguments for help.
 
+Installation:
 Requires perl, Getopt::Long, Config::Tiny, DBI, and Text::CSV.
+You can either download the tarball for each of these and `make install` each one manually or use the CPAN cli via `perl -MCPAN -e shell`.
+Additionally, if you are connecting a postgres server, you should install the `Pg` driver via `sudo apt-get install libdbd-pg-perl`.
 
 Examples:
 
