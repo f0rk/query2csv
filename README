@@ -3,25 +3,37 @@ it, saving the result as a csv.
 
 Call query2csv with no arguments for help.
 
-Installation:
+## Installation:
 Requires perl, Getopt::Long, Config::Tiny, DBI, and Text::CSV.
 You can either download the tarball for each of these and `make install` each one manually or use the CPAN cli via `perl -MCPAN -e shell`.
 Additionally, if you are connecting a postgres server, you should install the `Pg` driver via `sudo apt-get install libdbd-pg-perl`.
 
-Examples:
+## Configuration:
 
 This is a basic config file:
 
 ~$ cat ~/.query2csv
+```
 [modes]
-dev.dsn = dbi:Pg:dbname=dev
-dev.username = postgres
-dev.password = postgres
+local.dsn = dbi:Pg:dbname=dev
+local.username = postgres
+local.password = postgres
 
-staging.dsn = dbi:Pg:dbname=dev
-staging.username = postgres
-staging.password = postgres
+remote.dsn = dbi:Pg:dbname=dev;host=remote.host.com;port=5432;
+remote.username = postgres
+remote.password = postgres
+```
 
+The Perl DBI module will try to establish a connection like so:
+```perl
+DBI->connect($dsn, $username, $password);
+```
+
+In the example above, `dsn` is also known as data source name. This will specify the type of driver to use and parameters such as database name, hostname and port.
+**NOTE:** The parameters in the `dsn` are driver specific.
+
+
+## Usage:
 After you've created a config file, query2csv can be used thusly:
 
 query2csv dev ~/sql/query.sql ~/files/query.csv
