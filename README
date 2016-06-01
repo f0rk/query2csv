@@ -5,7 +5,7 @@ Call query2csv with no arguments for help.
 
 ## Installation:
 Requires perl, Getopt::Long, Config::Tiny, DBI, and Text::CSV.
-You can either download the tarball for each of these and `make install` each one manually or use the CPAN cli via `perl -MCPAN -e shell`.
+You can either install using CPAN cli (ie. `perl -MCPAN -e shell`) or with distribution packages (ie. apt-get install libconfig-tiny-perl).
 Additionally, if you are connecting a postgres server, you should install the `Pg` driver via `sudo apt-get install libdbd-pg-perl`.
 
 ## Configuration:
